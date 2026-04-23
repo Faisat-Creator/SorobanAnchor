@@ -155,6 +155,37 @@ pub struct RoutingOptions {
 }
 
 // ---------------------------------------------------------------------------
+// KYC and Compliance types
+// ---------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u32)]
+pub enum KycStatus {
+    Pending = 0,
+    Approved = 1,
+    Rejected = 2,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct ComplianceCheck {
+    pub subject: Address,
+    pub check_type: String,
+    pub result: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct KycRecord {
+    pub subject: Address,
+    pub status: u32,
+    pub timestamp: u64,
+    pub rejection_reason_hash: Option<Bytes>,
+}
+
+// ---------------------------------------------------------------------------
 // Metadata cache types
 // ---------------------------------------------------------------------------
 
@@ -287,6 +318,21 @@ pub struct EndpointUpdated {
     pub endpoint: String,
 }
 
+#[contracttype]
+#[derive(Clone)]
+struct KycApprovedEvent {
+    subject: Address,
+    timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+struct KycRejectedEvent {
+    subject: Address,
+    reason_hash: Bytes,
+    timestamp: u64,
+}
+
 // ---------------------------------------------------------------------------
 // TTLs (in ledgers)
 // ---------------------------------------------------------------------------
@@ -300,6 +346,14 @@ const INSTANCE_TTL: u32 = 518_400;
 
 fn admin_key(env: &Env) -> soroban_sdk::Vec<soroban_sdk::Symbol> {
     soroban_sdk::vec![env, symbol_short!("ADMIN")]
+}
+
+fn kyc_record_key(subject: &Address) -> (Symbol, Address) {
+    (symbol_short!("KYC"), subject.clone())
+}
+
+fn compliance_check_key(subject: &Address, check_type: &String) -> (Symbol, Address, String) {
+    (symbol_short!("COMP"), subject.clone(), check_type.clone())
 }
 
 // ---------------------------------------------------------------------------
@@ -1392,6 +1446,100 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
         match Self::get_anchor_asset_info(env, anchor, asset_code) {
             asset => asset.withdrawal_enabled,
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // KYC and Compliance
+    // -----------------------------------------------------------------------
+
+    pub fn approve_kyc(env: Env, subject: Address) {
+        Self::require_admin(&env);
+        let ts = env.ledger().timestamp();
+        let kyc_record = KycRecord {
+            subject: subject.clone(),
+            status: 1, // Approved
+            timestamp: ts,
+            rejection_reason_hash: None,
+        };
+        let key = kyc_record_key(&subject);
+        env.storage().persistent().set(&key, &kyc_record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("KYC_APPROVED"),),
+            KycApprovedEvent {
+                subject,
+                timestamp: ts,
+            },
+        );
+    }
+
+    pub fn reject_kyc(env: Env, subject: Address, reason_hash: Bytes) {
+        Self::require_admin(&env);
+        let ts = env.ledger().timestamp();
+        let kyc_record = KycRecord {
+            subject: subject.clone(),
+            status: 2, // Rejected
+            timestamp: ts,
+            rejection_reason_hash: Some(reason_hash.clone()),
+        };
+        let key = kyc_record_key(&subject);
+        env.storage().persistent().set(&key, &kyc_record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+
+        env.events().publish(
+            (symbol_short!("KYC_REJECTED"),),
+            KycRejectedEvent {
+                subject,
+                reason_hash,
+                timestamp: ts,
+            },
+        );
+    }
+
+    pub fn get_kyc_status(env: Env, subject: Address) -> u32 {
+        let key = kyc_record_key(&subject);
+        env.storage()
+            .persistent()
+            .get::<_, KycRecord>(&key)
+            .map(|record| record.status)
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::KycNotFound))
+    }
+
+    pub fn store_compliance_check(
+        env: Env,
+        subject: Address,
+        check_type: String,
+        result: u32,
+    ) {
+        let ts = env.ledger().timestamp();
+        let compliance_check = ComplianceCheck {
+            subject: subject.clone(),
+            check_type: check_type.clone(),
+            result,
+            timestamp: ts,
+        };
+        let key = compliance_check_key(&subject, &check_type);
+        env.storage().persistent().set(&key, &compliance_check);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+    }
+
+    pub fn get_compliance_check(
+        env: Env,
+        subject: Address,
+        check_type: String,
+    ) -> ComplianceCheck {
+        let key = compliance_check_key(&subject, &check_type);
+        env.storage()
+            .persistent()
+            .get::<_, ComplianceCheck>(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::ComplianceNotMet))
     }
 
     // -----------------------------------------------------------------------
