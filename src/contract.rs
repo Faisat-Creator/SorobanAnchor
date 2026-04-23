@@ -493,6 +493,37 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
             .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestorNotRegistered))
     }
 
+    // -----------------------------------------------------------------------
+    // Webhook endpoint management
+    // -----------------------------------------------------------------------
+
+    /// Register a webhook URL for an attestor (attestor-auth).
+    /// Validates the webhook URL via validate_anchor_domain.
+    pub fn register_webhook(env: Env, attestor: Address, webhook_url: String) {
+        attestor.require_auth();
+        Self::check_attestor(&env, &attestor);
+        crate::validate_anchor_domain(webhook_url.as_str()).map_err(|_| panic_with_error!(&env, ErrorCode::InvalidEndpointFormat))?;
+        let key = (symbol_short!("WEBHOOK"), attestor.clone());
+        env.storage().persistent().set(&key, &webhook_url);
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        env.events().publish(
+            (symbol_short!("webhook"), symbol_short!("registered")),
+            EndpointUpdated {
+                attestor,
+                endpoint: webhook_url,
+            },
+        );
+    }
+
+    /// Retrieve the webhook URL for an attestor.
+    pub fn get_webhook_url(env: Env, attestor: Address) -> String {
+        if !Self::is_attestor(env.clone(), attestor.clone()) {
+            panic_with_error!(&env, ErrorCode::AttestorNotRegistered);
+        }
+        env.storage().persistent()
+            .get::<_, String>(&(symbol_short!("WEBHOOK"), attestor))
+            .unwrap_or_else(|| panic_with_error!(&env, ErrorCode::AttestorNotRegistered))
+    }
 
     // -----------------------------------------------------------------------
     // Service configuration
