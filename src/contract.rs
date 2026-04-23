@@ -543,6 +543,7 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
     ) -> u64 {
         issuer.require_auth();
         Self::check_attestor(&env, &issuer);
+        Self::enforce_rate_limit(&env, &issuer);
         Self::check_timestamp(&env, timestamp);
 
         let config = RateLimiter::get_config(&env);
@@ -599,6 +600,7 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
     ) -> u64 {
         issuer.require_auth();
         Self::check_attestor(&env, &issuer);
+        Self::enforce_rate_limit(&env, &issuer);
         Self::check_timestamp(&env, timestamp);
 
         let used_key = (symbol_short!("USED"), payload_hash.clone());
@@ -860,6 +862,7 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
     ) -> u64 {
         issuer.require_auth();
         Self::check_attestor(&env, &issuer);
+        Self::enforce_rate_limit(&env, &issuer);
         Self::check_timestamp(&env, timestamp);
 
         let used_key = (symbol_short!("USED"), payload_hash.clone());
@@ -1401,8 +1404,26 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
     }
 
     // -----------------------------------------------------------------------
+    // Rate limit configuration
+    // -----------------------------------------------------------------------
+
+    pub fn set_rate_limit_config(env: Env, max_submissions: u32, window_length: u32) {
+        Self::require_admin(&env);
+        let config = crate::rate_limiter::RateLimitConfig { max_submissions, window_length };
+        RateLimiter::update_config(&env, &Self::get_admin(env.clone()), &config)
+            .unwrap_or_else(|_| panic_with_error!(&env, ErrorCode::ValidationError));
+    }
+
+    // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
+
+    fn enforce_rate_limit(env: &Env, attestor: &Address) {
+        let config = RateLimiter::get_config(env);
+        if RateLimiter::check_and_increment(env, attestor, &config).is_err() {
+            panic_with_error!(env, ErrorCode::RateLimitExceeded);
+        }
+    }
 
     fn require_admin(env: &Env) {
         let admin: Address = env
