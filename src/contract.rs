@@ -7,6 +7,7 @@ use crate::deterministic_hash::{compute_payload_hash, verify_payload_hash};
 use crate::errors::ErrorCode;
 use crate::rate_limiter::RateLimiter;
 use crate::sep10_jwt;
+use crate::transaction_state_tracker::{TransactionState, TransactionStateRecord};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1396,6 +1397,30 @@ pub fn is_attestor(env: Env, attestor: Address) -> bool {
         match Self::get_anchor_asset_info(env, anchor, asset_code) {
             asset => asset.withdrawal_enabled,
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Transaction state
+    // -----------------------------------------------------------------------
+
+    pub fn create_transaction_record(
+        env: Env,
+        transaction_id: u64,
+        initiator: Address,
+    ) -> TransactionStateRecord {
+        let now = env.ledger().timestamp();
+        let record = TransactionStateRecord {
+            transaction_id,
+            state: TransactionState::Pending,
+            initiator,
+            timestamp: now,
+            last_updated: now,
+            error_message: None,
+        };
+        let key = (symbol_short!("TXSTATE"), transaction_id);
+        env.storage().persistent().set(&key, &record);
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL, PERSISTENT_TTL);
+        record
     }
 
     // -----------------------------------------------------------------------
