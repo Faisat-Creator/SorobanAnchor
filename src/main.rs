@@ -77,6 +77,14 @@ fn stellar_invoke(
 #[derive(Parser)]
 #[command(name = "anchorkit", about = "SorobanAnchor CLI")]
 struct Cli {
+    /// Contract ID to invoke (or set ANCHOR_CONTRACT_ID)
+    #[arg(long, global = true, env = "ANCHOR_CONTRACT_ID")]
+    contract_id: Option<String>,
+
+    /// Stellar network: testnet | mainnet | futurenet (or set STELLAR_NETWORK)
+    #[arg(long, global = true, env = "STELLAR_NETWORK", default_value = "testnet")]
+    network: String,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -326,8 +334,8 @@ fn revoke(address: &str, contract_id: &str, network: &str, source: &str) {
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Deploy { network, source } => {
-            deploy(&network, &source);
+        Commands::Deploy { source } => {
+            deploy(&cli.network, &source);
         }
         Commands::Register { address, services, contract_id, network, secret_key, keypair_file, sep10_token, sep10_issuer } => {
             let source = resolve_source(secret_key.as_deref(), keypair_file.as_deref());
