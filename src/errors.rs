@@ -45,6 +45,9 @@ pub enum ErrorCode {
     NotInitialized = 16,
     AttestationNotFound = 17,
     InvalidSep10Token = 18,
+    KycNotFound = 19,
+    KycPending = 20,
+    KycRejected = 21,
     CacheExpired = 48,
     CacheNotFound = 49,
 }
@@ -72,6 +75,9 @@ impl ErrorCode {
             ErrorCode::NotInitialized => "Contract is not initialized",
             ErrorCode::AttestationNotFound => "Attestation not found",
             ErrorCode::InvalidSep10Token => "SEP-10 JWT is missing, expired, or invalid",
+            ErrorCode::KycNotFound => "KYC record not found",
+            ErrorCode::KycPending => "KYC verification is pending",
+            ErrorCode::KycRejected => "KYC verification was rejected",
             ErrorCode::CacheExpired => "Cache entry has expired",
             ErrorCode::CacheNotFound => "Cache entry not found",
         }
@@ -192,6 +198,18 @@ impl AnchorKitError {
         Self::from_code(ErrorCode::InvalidSep10Token)
     }
 
+    pub fn kyc_not_found() -> Self {
+        Self::from_code(ErrorCode::KycNotFound)
+    }
+
+    pub fn kyc_pending() -> Self {
+        Self::from_code(ErrorCode::KycPending)
+    }
+
+    pub fn kyc_rejected() -> Self {
+        Self::from_code(ErrorCode::KycRejected)
+    }
+
     pub fn validation_error(context: &str) -> Self {
         Self::with_context(ErrorCode::ValidationError, ErrorCode::ValidationError.default_message(), context)
     }
@@ -261,6 +279,9 @@ mod tests {
         assert_eq!(AnchorKitError::no_quotes_available().code, ErrorCode::NoQuotesAvailable);
         assert_eq!(AnchorKitError::services_not_configured().code, ErrorCode::ServicesNotConfigured);
         assert_eq!(AnchorKitError::invalid_sep10_token().code, ErrorCode::InvalidSep10Token);
+        assert_eq!(AnchorKitError::kyc_not_found().code, ErrorCode::KycNotFound);
+        assert_eq!(AnchorKitError::kyc_pending().code, ErrorCode::KycPending);
+        assert_eq!(AnchorKitError::kyc_rejected().code, ErrorCode::KycRejected);
     }
 
     #[test]
@@ -292,6 +313,9 @@ mod tests {
             ErrorCode::NotInitialized,
             ErrorCode::AttestationNotFound,
             ErrorCode::InvalidSep10Token,
+            ErrorCode::KycNotFound,
+            ErrorCode::KycPending,
+            ErrorCode::KycRejected,
             ErrorCode::CacheExpired,
             ErrorCode::CacheNotFound,
         ];
