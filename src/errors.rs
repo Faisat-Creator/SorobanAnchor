@@ -338,6 +338,7 @@ mod tests {
             ErrorCode::KycNotFound,
             ErrorCode::KycPending,
             ErrorCode::KycRejected,
+            ErrorCode::IllegalTransition,
             ErrorCode::CacheExpired,
             ErrorCode::CacheNotFound,
             ErrorCode::IllegalTransition,
