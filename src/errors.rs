@@ -46,9 +46,16 @@ pub enum ErrorCode {
     InvalidSep10Token = 18,
     KycNotFound = 19,
     KycRejected = 21,
+<<<<<<< fix/kyc-pending-error-code-22
     KycPending = 22,
     NotInitialized = 23,
     IllegalTransition = 24,
+=======
+    NotInitialized = 22,
+    IllegalTransition = 23,
+    SessionExpired = 25,
+    SessionClosed = 26,
+>>>>>>> main
     CacheExpired = 48,
     CacheNotFound = 49,
 }
@@ -83,6 +90,12 @@ impl ErrorCode {
             ErrorCode::IllegalTransition => "Illegal transaction state transition",
             ErrorCode::CacheExpired => "Cache entry has expired",
             ErrorCode::CacheNotFound => "Cache entry not found",
+<<<<<<< fix/kyc-pending-error-code-22
+=======
+            ErrorCode::IllegalTransition => "Illegal transaction state transition",
+            ErrorCode::SessionExpired => "Session has expired",
+            ErrorCode::SessionClosed => "Session is closed",
+>>>>>>> main
         }
     }
 }
@@ -228,6 +241,14 @@ impl AnchorKitError {
             &alloc::format!("{} -> {}", from, to),
         )
     }
+
+    pub fn session_expired() -> Self {
+        Self::from_code(ErrorCode::SessionExpired)
+    }
+
+    pub fn session_closed() -> Self {
+        Self::from_code(ErrorCode::SessionClosed)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -325,11 +346,17 @@ mod tests {
             ErrorCode::InvalidSep10Token,
             ErrorCode::KycNotFound,
             ErrorCode::KycRejected,
+<<<<<<< fix/kyc-pending-error-code-22
             ErrorCode::KycPending,
             ErrorCode::NotInitialized,
+=======
+>>>>>>> main
             ErrorCode::IllegalTransition,
             ErrorCode::CacheExpired,
             ErrorCode::CacheNotFound,
+            ErrorCode::IllegalTransition,
+            ErrorCode::SessionExpired,
+            ErrorCode::SessionClosed,
         ];
         for code in codes {
             assert!(!code.default_message().is_empty());
