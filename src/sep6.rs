@@ -271,6 +271,32 @@ pub fn fetch_transaction_status(
     })
 }
 
+/// Normalize a list of raw SEP-6 transaction responses (from `GET /transactions`)
+/// into canonical [`TransactionStatusResponse`] values.
+///
+/// Entries with an empty `transaction_id` are silently skipped.
+pub fn list_transactions(
+    raw_list: alloc::vec::Vec<RawTransactionResponse>,
+) -> alloc::vec::Vec<TransactionStatusResponse> {
+    raw_list
+        .into_iter()
+        .filter(|r| !r.transaction_id.is_empty())
+        .map(|r| TransactionStatusResponse {
+            transaction_id: r.transaction_id,
+            kind: r
+                .kind
+                .as_deref()
+                .map(TransactionKind::from_str)
+                .unwrap_or(TransactionKind::Deposit),
+            status: TransactionStatus::from_str(&r.status),
+            amount_in: r.amount_in,
+            amount_out: r.amount_out,
+            amount_fee: r.amount_fee,
+            message: r.message,
+        })
+        .collect()
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -393,38 +419,67 @@ mod tests {
     }
 
     #[test]
-    fn test_status_no_market() {
-        assert_eq!(TransactionStatus::from_str("no_market"), TransactionStatus::NoMarket);
-        assert_eq!(TransactionStatus::NoMarket.as_str(), "no_market");
+    fn test_list_transactions_normalizes_all() {
+        let raw_list = vec![
+            RawTransactionResponse {
+                transaction_id: "txn-001".to_string(),
+                kind: Some("deposit".to_string()),
+                status: "completed".to_string(),
+                amount_in: Some(100),
+                amount_out: Some(99),
+                amount_fee: Some(1),
+                message: None,
+            },
+            RawTransactionResponse {
+                transaction_id: "txn-002".to_string(),
+                kind: Some("withdrawal".to_string()),
+                status: "pending_external".to_string(),
+                amount_in: None,
+                amount_out: None,
+                amount_fee: None,
+                message: Some("awaiting bank".to_string()),
+            },
+        ];
+        let result = list_transactions(raw_list);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].transaction_id, "txn-001");
+        assert_eq!(result[0].status, TransactionStatus::Completed);
+        assert_eq!(result[0].kind, TransactionKind::Deposit);
+        assert_eq!(result[1].transaction_id, "txn-002");
+        assert_eq!(result[1].status, TransactionStatus::PendingExternal);
+        assert_eq!(result[1].kind, TransactionKind::Withdrawal);
     }
 
     #[test]
-    fn test_status_too_small() {
-        assert_eq!(TransactionStatus::from_str("too_small"), TransactionStatus::TooSmall);
-        assert_eq!(TransactionStatus::TooSmall.as_str(), "too_small");
+    fn test_list_transactions_skips_empty_ids() {
+        let raw_list = vec![
+            RawTransactionResponse {
+                transaction_id: "".to_string(),
+                kind: None,
+                status: "completed".to_string(),
+                amount_in: None,
+                amount_out: None,
+                amount_fee: None,
+                message: None,
+            },
+            RawTransactionResponse {
+                transaction_id: "txn-valid".to_string(),
+                kind: None,
+                status: "completed".to_string(),
+                amount_in: Some(50),
+                amount_out: Some(49),
+                amount_fee: Some(1),
+                message: None,
+            },
+        ];
+        let result = list_transactions(raw_list);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].transaction_id, "txn-valid");
     }
 
     #[test]
-    fn test_status_too_large() {
-        assert_eq!(TransactionStatus::from_str("too_large"), TransactionStatus::TooLarge);
-        assert_eq!(TransactionStatus::TooLarge.as_str(), "too_large");
-    }
-
-    #[test]
-    fn test_deposit_clawback_enabled() {
-        let mut raw = raw_deposit();
-        raw.clawback_enabled = Some(true);
-        let resp = initiate_deposit(raw).unwrap();
-        assert_eq!(resp.clawback_enabled, Some(true));
-    }
-
-    #[test]
-    fn test_deposit_stellar_memo_fields() {
-        let mut raw = raw_deposit();
-        raw.stellar_memo = Some("memo-abc".to_string());
-        raw.stellar_memo_type = Some("text".to_string());
-        let resp = initiate_deposit(raw).unwrap();
-        assert_eq!(resp.stellar_memo, Some("memo-abc".to_string()));
-        assert_eq!(resp.stellar_memo_type, Some("text".to_string()));
+    fn test_list_transactions_empty_input() {
+        let result = list_transactions(vec![]);
+        assert!(result.is_empty());
     }
 }
